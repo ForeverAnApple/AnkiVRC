@@ -14,12 +14,14 @@ from .status_provider import AnkiStatusProvider
 DEFAULT_CONFIG = {
     "osc_host": "127.0.0.1",
     "osc_port": 9000,
-    "update_interval": 10,
+    "update_interval_seconds": 10,
     "message_template": "Anki: {left} left | {done} done today",
     "done_message_template": "Anki: Done for today! | {done} done today",
     "clear_status_on_exit": True,
     "debug": False,
 }
+
+MIN_UPDATE_INTERVAL_SECONDS = 1
 
 
 def _debug_log(message: str, enabled: bool) -> None:
@@ -52,11 +54,11 @@ class ReviewStatusController:
             self.timer.timeout.connect(self._send_review_status)
             _debug_log("AnkiVRC: review timer created", self._debug_enabled())
 
-        self.timer.setInterval(self.config["update_interval"] * 1000)
+        self.timer.setInterval(self.config["update_interval_seconds"] * 1000)
         _debug_log(
             "AnkiVRC: config loaded "
             f"host={self.config['osc_host']} port={self.config['osc_port']} "
-            f"interval={self.config['update_interval']} clear_on_exit={self.config['clear_status_on_exit']} "
+            f"interval={self.config['update_interval_seconds']} clear_on_exit={self.config['clear_status_on_exit']} "
             f"debug={self.config['debug']}",
             self._debug_enabled(),
         )
@@ -177,15 +179,22 @@ class ReviewStatusController:
         config = dict(DEFAULT_CONFIG)
         loaded = mw.addonManager.getConfig(__name__) or {}
         config.update(loaded)
+
+        raw_interval = loaded.get(
+            "update_interval_seconds",
+            loaded.get(
+                "update_interval",
+                DEFAULT_CONFIG["update_interval_seconds"],
+            ),
+        )
+
         config["osc_host"] = str(config["osc_host"] or DEFAULT_CONFIG["osc_host"])
         config["osc_port"] = self._safe_int(
             config["osc_port"], DEFAULT_CONFIG["osc_port"]
         )
-        config["update_interval"] = max(
-            1,
-            self._safe_int(
-                config["update_interval"], DEFAULT_CONFIG["update_interval"]
-            ),
+        config["update_interval_seconds"] = max(
+            MIN_UPDATE_INTERVAL_SECONDS,
+            self._safe_int(raw_interval, DEFAULT_CONFIG["update_interval_seconds"]),
         )
         config["message_template"] = str(
             config["message_template"] or DEFAULT_CONFIG["message_template"]
@@ -195,6 +204,16 @@ class ReviewStatusController:
         )
         config["clear_status_on_exit"] = bool(config["clear_status_on_exit"])
         config["debug"] = bool(config.get("debug", DEFAULT_CONFIG["debug"]))
+
+        if (
+            self._safe_int(raw_interval, DEFAULT_CONFIG["update_interval_seconds"])
+            < MIN_UPDATE_INTERVAL_SECONDS
+        ):
+            print(
+                "AnkiVRC: update interval below VRChat-safe minimum; "
+                f"using {MIN_UPDATE_INTERVAL_SECONDS} second(s) instead"
+            )
+
         return config
 
     def _format_status_message(self, left: int, done: int) -> str:

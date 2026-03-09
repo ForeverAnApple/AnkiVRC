@@ -1,7 +1,7 @@
 {
   "osc_host": "127.0.0.1",
   "osc_port": 9000,
-  "update_interval": 10,
+  "update_interval_seconds": 10,
   "message_template": "Anki: {left} left | {done} done today",
   "done_message_template": "Anki: Done for today! | {done} done today",
   "clear_status_on_exit": true,
